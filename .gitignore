@@ -21,3 +21,5 @@ data/raw/
 
 # Qdrant local storage if used
 qdrant_storage/
+.vercel
+.env*
