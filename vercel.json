@@ -1,0 +1,6 @@
+{
+  "outputDirectory": "reports",
+  "rewrites": [
+    { "source": "/", "destination": "/dashboard.html" }
+  ]
+}
