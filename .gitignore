@@ -1,0 +1,23 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.Python
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb.bak
+
+# macOS
+.DS_Store
+
+# Large data files — raw filings live locally, not in git
+data/raw/
+
+# Qdrant local storage if used
+qdrant_storage/

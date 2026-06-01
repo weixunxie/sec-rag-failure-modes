@@ -1,0 +1,41 @@
+question_id,task_type,company,ticker,year,comparison_company,comparison_ticker,comparison_year,question,expected_evidence_section,expected_evidence_type
+Q001,single_fact,Apple Inc.,AAPL,2023,,,,"What was Apple's total net revenue for fiscal year 2023?",Financial Statements,revenue_figure
+Q002,single_fact,Microsoft Corporation,MSFT,2023,,,,"What was Microsoft's total revenue for fiscal year 2023, and which segment contributed the most?",Financial Statements,revenue_figure
+Q003,single_fact,NVIDIA Corporation,NVDA,2024,,,,"What was NVIDIA's total revenue for fiscal year 2024 and what percentage came from the Data Center segment?",Financial Statements,revenue_figure
+Q004,single_fact,Tesla Inc.,TSLA,2023,,,,"What were Tesla's total automotive revenues in 2023 and how do they break down between regulatory credits and vehicle sales?",Financial Statements,revenue_breakdown
+Q005,single_fact,JPMorgan Chase,JPM,2022,,,,"What was JPMorgan Chase's net income for fiscal year 2022 and what was the return on equity?",Financial Statements,profitability_metric
+Q006,single_fact,Apple Inc.,AAPL,2022,,,,"How many retail stores did Apple operate globally as of the end of fiscal year 2022, and in which regions?",Business,operational_metric
+Q007,single_fact,NVIDIA Corporation,NVDA,2023,,,,"What were NVIDIA's research and development expenses in fiscal year 2023 as a percentage of revenue?",Financial Statements,expense_ratio
+Q008,single_fact,Tesla Inc.,TSLA,2022,,,,"How many vehicles did Tesla deliver in fiscal year 2022, broken down by model?",Business,production_metric
+Q009,single_fact,Microsoft Corporation,MSFT,2022,,,,"What was Microsoft's operating income for fiscal year 2022 and what was the operating margin?",Financial Statements,profitability_metric
+Q010,single_fact,JPMorgan Chase,JPM,2024,,,,"What was JPMorgan Chase's total assets as of year-end 2024 and how did they compare to the prior year?",Financial Statements,balance_sheet_figure
+Q011,risk_factor,Apple Inc.,AAPL,2023,,,,"What supply chain risks did Apple identify in its 2023 10-K, particularly regarding geographic concentration?",Risk Factors,supply_chain_risk
+Q012,risk_factor,NVIDIA Corporation,NVDA,2023,,,,"What regulatory and export control risks did NVIDIA disclose in its 2023 10-K related to China and semiconductor restrictions?",Risk Factors,regulatory_risk
+Q013,risk_factor,Tesla Inc.,TSLA,2023,,,,"What competition risks did Tesla describe in its 2023 10-K, specifically mentioning established automakers and new entrants?",Risk Factors,competitive_risk
+Q014,risk_factor,Microsoft Corporation,MSFT,2024,,,,"What cybersecurity and AI-related risks did Microsoft identify in its 2024 10-K?",Risk Factors,operational_risk
+Q015,risk_factor,JPMorgan Chase,JPM,2023,,,,"What macroeconomic and interest rate risks did JPMorgan Chase highlight in its 2023 10-K?",Risk Factors,macro_risk
+Q016,risk_factor,Apple Inc.,AAPL,2024,,,,"What risks related to artificial intelligence and machine learning did Apple disclose in its 2024 10-K?",Risk Factors,technology_risk
+Q017,risk_factor,NVIDIA Corporation,NVDA,2024,,,,"What risks did NVIDIA identify related to product concentration and customer dependence in its 2024 10-K?",Risk Factors,concentration_risk
+Q018,risk_factor,Tesla Inc.,TSLA,2022,,,,"What manufacturing and production risks did Tesla describe in its 2022 10-K related to factory ramp-up challenges?",Risk Factors,operational_risk
+Q019,risk_factor,Microsoft Corporation,MSFT,2022,,,,"What risks did Microsoft highlight regarding its gaming business and the Activision acquisition in its 2022 10-K?",Risk Factors,strategic_risk
+Q020,risk_factor,JPMorgan Chase,JPM,2022,,,,"What credit risk and loan loss reserve disclosures did JPMorgan Chase make in its 2022 10-K?",Risk Factors,credit_risk
+Q021,cross_year,NVIDIA Corporation,NVDA,2022,NVIDIA Corporation,NVDA,2024,"How did NVIDIA's description of AI and data center demand evolve between its 2022 and 2024 10-K filings?",Business,strategic_narrative
+Q022,cross_year,Tesla Inc.,TSLA,2022,Tesla Inc.,TSLA,2024,"How did Tesla's discussion of supply chain constraints and raw material risks change between 2022 and 2024?",Risk Factors,supply_chain_risk
+Q023,cross_year,Microsoft Corporation,MSFT,2022,Microsoft Corporation,MSFT,2024,"How did Microsoft's cloud revenue and Azure growth narrative change between fiscal years 2022 and 2024?",MD&A,revenue_trend
+Q024,cross_year,Apple Inc.,AAPL,2022,Apple Inc.,AAPL,2024,"How did Apple's discussion of services revenue and its importance to total revenue evolve from 2022 to 2024?",MD&A,segment_trend
+Q025,cross_year,JPMorgan Chase,JPM,2022,JPMorgan Chase,JPM,2024,"How did JPMorgan Chase's discussion of credit loss provisions and macro uncertainty change from 2022 to 2024?",MD&A,credit_risk_trend
+Q026,cross_year,NVIDIA Corporation,NVDA,2023,NVIDIA Corporation,NVDA,2024,"Compare NVIDIA's gross margin discussion and drivers between fiscal years 2023 and 2024.",MD&A,margin_trend
+Q027,cross_year,Tesla Inc.,TSLA,2023,Tesla Inc.,TSLA,2024,"How did Tesla's discussion of vehicle pricing strategy and its impact on margins evolve from 2023 to 2024?",MD&A,pricing_strategy
+Q028,cross_year,Microsoft Corporation,MSFT,2023,Microsoft Corporation,MSFT,2024,"How did Microsoft's discussion of AI investment and Copilot products change between fiscal years 2023 and 2024?",Business,ai_strategy
+Q029,cross_year,Apple Inc.,AAPL,2022,Apple Inc.,AAPL,2023,"How did Apple's iPhone revenue and geographic breakdown change between fiscal years 2022 and 2023?",Financial Statements,revenue_breakdown
+Q030,cross_year,JPMorgan Chase,JPM,2023,JPMorgan Chase,JPM,2024,"How did JPMorgan's net interest income trend between 2023 and 2024 given changes in the interest rate environment?",MD&A,interest_income_trend
+Q031,cross_company,Apple Inc.,AAPL,2023,Microsoft Corporation,MSFT,2023,"Compare the research and development spending as a percentage of revenue for Apple and Microsoft in fiscal year 2023.",Financial Statements,expense_comparison
+Q032,cross_company,NVIDIA Corporation,NVDA,2024,Tesla Inc.,TSLA,2024,"Compare how NVIDIA and Tesla each describe their competitive advantages and moats in their respective 2024 10-K filings.",Business,competitive_positioning
+Q033,cross_company,Apple Inc.,AAPL,2023,JPMorgan Chase,JPM,2023,"Compare how Apple and JPMorgan Chase each describe their approach to share repurchase programs in their 2023 10-K filings.",MD&A,capital_allocation
+Q034,cross_company,Microsoft Corporation,MSFT,2023,NVIDIA Corporation,NVDA,2023,"Compare Microsoft's and NVIDIA's descriptions of AI-related business opportunities and investments in their 2023 10-K filings.",Business,ai_strategy
+Q035,cross_company,Tesla Inc.,TSLA,2023,Apple Inc.,AAPL,2023,"Compare how Tesla and Apple each discuss their international revenue exposure and foreign currency risks in 2023.",Risk Factors,geographic_risk
+Q036,cross_company,JPMorgan Chase,JPM,2024,Microsoft Corporation,MSFT,2024,"Compare the employee headcount and human capital disclosures between JPMorgan Chase and Microsoft in their 2024 10-K filings.",Business,human_capital
+Q037,cross_company,NVIDIA Corporation,NVDA,2023,Apple Inc.,AAPL,2023,"How did NVIDIA and Apple each describe their reliance on third-party manufacturers (TSMC) in their 2023 10-K filings?",Risk Factors,supply_chain_risk
+Q038,cross_company,Tesla Inc.,TSLA,2022,NVIDIA Corporation,NVDA,2022,"Compare how Tesla and NVIDIA each discussed chip and semiconductor shortages in their 2022 10-K filings.",Risk Factors,supply_chain_risk
+Q039,cross_company,Apple Inc.,AAPL,2024,NVIDIA Corporation,NVDA,2024,"Compare Apple's and NVIDIA's gross margin levels and the key drivers each company cites in their 2024 10-K filings.",MD&A,margin_comparison
+Q040,cross_company,Microsoft Corporation,MSFT,2022,JPMorgan Chase,JPM,2022,"Compare Microsoft's and JPMorgan Chase's descriptions of their respective regulatory compliance risks and legal proceedings in 2022.",Risk Factors,regulatory_risk

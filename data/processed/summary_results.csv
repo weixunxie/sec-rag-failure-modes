@@ -1,0 +1,4 @@
+strategy,correctness,faithfulness,coverage,pct_correct,pct_retrieval,pct_generation
+Metadata Filtered,1.52,0.57,0.9,40.0,2.5,57.5
+Task-Aware,1.75,0.82,1.1,62.5,0.0,37.5
+Vanilla,1.68,0.68,0.92,50.0,10.0,40.0
