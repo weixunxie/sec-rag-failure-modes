@@ -69,7 +69,7 @@ correct_n = [20, 16, 25]
 gen_n     = [16, 23, 15]
 ret_n     = [4,   1,  0]
 
-fig, ax = plt.subplots(figsize=(6.8, 2.8))
+fig, ax = plt.subplots(figsize=(6.8, 2.6))
 fig.patch.set_facecolor(CARD); ax.set_facecolor(CARD)
 y = np.arange(3); h = 0.5
 ax.grid(False)
@@ -91,15 +91,20 @@ for bar, v in [(b1, correct_n), (b2, gen_n), (b3, ret_n)]:
 ax.set_yticks(y)
 ax.set_yticklabels(STRAT_SHORT, fontsize=10.5, color=TXT, fontweight='600')
 ax.set_xlim(0, 46)
-ax.set_xlabel('Number of answers (out of 40)', fontsize=9, color=DIM)
 for sp in ax.spines.values(): sp.set_visible(False)
 ax.tick_params(length=0, colors=DIM)
 
-legend = ax.legend(loc='lower right', fontsize=8.5, framealpha=0,
-                   labelcolor=DIM, handlelength=1.1, handletextpad=0.5,
-                   borderpad=0, columnspacing=1, ncol=3,
-                   bbox_to_anchor=(1, -0.22))
-plt.tight_layout(pad=1.0)
+# Legend as a separate row below the axes — no overlap with x label
+patches = [
+    mpatches.Patch(color=G_OK,  label='Correct'),
+    mpatches.Patch(color=G_GEN, label='Generation Error'),
+    mpatches.Patch(color=G_RET, label='Retrieval Error'),
+]
+fig.legend(handles=patches, loc='lower center', bbox_to_anchor=(0.5, -0.08),
+           ncol=3, fontsize=8.5, framealpha=0, labelcolor=DIM,
+           handlelength=1.1, handletextpad=0.5, columnspacing=1.4)
+fig.subplots_adjust(bottom=0.18)
+plt.tight_layout(rect=[0, 0.12, 1, 1])
 chart_stage = fig_to_b64(fig); plt.close()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -345,10 +350,15 @@ CSS = """
   --orange:#f97316;--orange-lt:#fff7ed;
 }
 body{font-family:'Inter','Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.55}
-header{background:var(--card);border-bottom:1px solid var(--border);padding:22px 40px;display:flex;align-items:baseline;gap:16px}
+header{background:var(--card);border-bottom:1px solid var(--border);padding:20px 40px}
+header .header-inner{max-width:1360px;margin:0 auto;display:flex;align-items:center;gap:16px}
 header h1{font-size:17px;font-weight:800;letter-spacing:-.3px;white-space:nowrap}
-header .sub{font-size:12px;color:var(--dim)}
-main{padding:24px 40px 60px;max-width:1360px;display:flex;flex-direction:column;gap:20px}
+header .sub{font-size:12px;color:var(--dim);flex:1}
+header .header-right{display:flex;align-items:center;gap:12px;flex-shrink:0}
+header .author{font-size:12px;color:var(--mid);font-weight:500}
+header .gh-btn{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:500;color:var(--dim);text-decoration:none;transition:color .15s}
+header .gh-btn:hover{color:var(--text)}
+main{padding:24px 40px 60px;max-width:1360px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
 .row{display:flex;gap:18px}
 .row>*{flex:1;min-width:0}
 .row.split-40>*:first-child{flex:0 0 38%}
@@ -437,8 +447,14 @@ HTML = f"""<!DOCTYPE html>
 </head>
 <body>
 <header>
-  <h1>SEC RAG Failure Modes</h1>
-  <p class="sub">3 retrieval strategies &nbsp;·&nbsp; 40 questions &nbsp;·&nbsp; AAPL · MSFT · NVDA · TSLA · JPM &nbsp;·&nbsp; 2022–2024 10-K filings</p>
+  <div class="header-inner">
+    <h1>SEC RAG Failure Modes</h1>
+    <p class="sub">3 retrieval strategies &nbsp;·&nbsp; 40 questions &nbsp;·&nbsp; AAPL · MSFT · NVDA · TSLA · JPM &nbsp;·&nbsp; 2022–2024 10-K filings</p>
+    <div class="header-right">
+      <span class="author">Stephanie Xie</span>
+      <a class="gh-btn" href="https://github.com/weixunxie/sec-rag-failure-modes" target="_blank">GitHub ↗</a>
+    </div>
+  </div>
 </header>
 <main>
 
