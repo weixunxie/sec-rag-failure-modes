@@ -548,7 +548,8 @@ HTML = f"""<!DOCTYPE html>
 </body>
 </html>"""
 
-out = os.path.join(os.path.dirname(__file__), 'dashboard.html')
-with open(out, 'w', encoding='utf-8') as f:
-    f.write(HTML)
-print(f"Written {len(HTML):,} bytes -> {out}")
+for name in ('dashboard.html', 'index.html'):          # index.html is what Vercel serves
+    out = os.path.join(os.path.dirname(__file__), name)
+    with open(out, 'w', encoding='utf-8') as f:
+        f.write(HTML)
+    print(f"Written {len(HTML):,} bytes -> {out}")

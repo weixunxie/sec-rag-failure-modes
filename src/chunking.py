@@ -8,14 +8,27 @@ from tqdm import tqdm
 
 from src.config import CHUNK_SIZE, CHUNK_OVERLAP, PROCESSED_DIR
 
+# Order matters: more specific items (1A, 7A, 9A) are tested before their parents.
+# Every other Item / Part heading is mapped to "Other" so that a section ends at the
+# next heading instead of running to the end of the document (previously everything
+# after Item 9A -- exhibits, signatures, JPM's full annual report -- was labelled
+# "Controls").
+_ITEM = r"^(?:part\s+[iv]+\s*[\.\-\u2014\u2013:]?\s*)?item\s*"
 SECTION_PATTERNS = [
-    (re.compile(r"item\s+1a[\s\.\:\-]", re.IGNORECASE), "Risk Factors"),
-    (re.compile(r"item\s+1[^a-z0-9][\s\.\:\-]", re.IGNORECASE), "Business"),
-    (re.compile(r"item\s+7a[\s\.\:\-]", re.IGNORECASE), "Market Risk"),
-    (re.compile(r"item\s+7[^a-z0-9][\s\.\:\-]", re.IGNORECASE), "MD&A"),
-    (re.compile(r"item\s+8[\s\.\:\-]", re.IGNORECASE), "Financial Statements"),
-    (re.compile(r"item\s+9a[\s\.\:\-]", re.IGNORECASE), "Controls"),
+    (re.compile(_ITEM + r"1a\b", re.IGNORECASE), "Risk Factors"),
+    (re.compile(_ITEM + r"1b\b", re.IGNORECASE), "Other"),
+    (re.compile(_ITEM + r"1c\b", re.IGNORECASE), "Other"),
+    (re.compile(_ITEM + r"1\b(?![0-9])", re.IGNORECASE), "Business"),
+    (re.compile(_ITEM + r"7a\b", re.IGNORECASE), "Market Risk"),
+    (re.compile(_ITEM + r"7\b(?![0-9])", re.IGNORECASE), "MD&A"),
+    (re.compile(_ITEM + r"8\b(?![0-9])", re.IGNORECASE), "Financial Statements"),
+    (re.compile(_ITEM + r"9a\b", re.IGNORECASE), "Controls"),
+    (re.compile(_ITEM + r"(?:9b|9c|9|1[0-6]|[2-6])\b", re.IGNORECASE), "Other"),
+    (re.compile(r"^(?:signatures|exhibit index|exhibits and financial statement schedules)\b", re.IGNORECASE), "Other"),
 ]
+
+# A real section is much longer than a table-of-contents line or a cross-reference.
+MIN_SECTION_CHARS = 1500
 
 TOKENIZER = tiktoken.get_encoding("cl100k_base")
 
@@ -32,36 +45,45 @@ def split_into_sections(text: str) -> list[dict]:
     """
     Detect 10-K section boundaries and split the filing into labelled sections.
     Returns list of {section_name: str, text: str}.
+
+    Heading lines are matched at the start of a line.  Candidate sections
+    shorter than MIN_SECTION_CHARS (table-of-contents entries, "see Item 7"
+    cross-references) are merged into the preceding section, so the label of
+    a chunk reflects the substantive section it belongs to.
     """
     lines = text.splitlines()
-    section_starts = []
-
+    starts = []
     for i, line in enumerate(lines):
         stripped = line.strip()
-        if not stripped:
+        if not stripped or len(stripped) > 200:
             continue
         for pattern, section_name in SECTION_PATTERNS:
             if pattern.match(stripped):
-                section_starts.append((i, section_name))
+                starts.append((i, section_name))
                 break
 
-    if not section_starts:
+    if not starts:
         return [{"section_name": "Full Document", "text": text}]
 
-    sections = []
-    for idx, (line_idx, section_name) in enumerate(section_starts):
-        start = line_idx
-        end = section_starts[idx + 1][0] if idx + 1 < len(section_starts) else len(lines)
-        section_text = "\n".join(lines[start:end]).strip()
-        if section_text:
-            sections.append({"section_name": section_name, "text": section_text})
+    raw = []
+    if starts[0][0] > 0:
+        raw.append(("Preamble", "\n".join(lines[: starts[0][0]])))
+    for idx, (line_idx, name) in enumerate(starts):
+        end = starts[idx + 1][0] if idx + 1 < len(starts) else len(lines)
+        raw.append((name, "\n".join(lines[line_idx:end])))
 
-    # Prepend any text before the first detected section as a preamble
-    if section_starts[0][0] > 0:
-        preamble = "\n".join(lines[: section_starts[0][0]]).strip()
-        if preamble:
-            sections.insert(0, {"section_name": "Preamble", "text": preamble})
-
+    sections: list[dict] = []
+    for name, body in raw:
+        body = body.strip()
+        if not body:
+            continue
+        if len(body) < MIN_SECTION_CHARS and sections:
+            sections[-1]["text"] += "\n" + body          # TOC line / cross-reference
+            continue
+        if sections and sections[-1]["section_name"] == name:
+            sections[-1]["text"] += "\n" + body
+        else:
+            sections.append({"section_name": name, "text": body})
     return sections
 
 

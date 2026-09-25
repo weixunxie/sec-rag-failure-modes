@@ -11,31 +11,44 @@ from src.config import COMPANIES, YEARS, FILING_TYPE, SEC_HEADERS, RAW_DIR, PROC
 
 
 def _search_filings_page(page: dict, ticker: str, cik: str, company_name: str, year: int, filing_type: str) -> list:
-    """Scan one page of the EDGAR filings array and return matching candidates."""
+    """
+    Scan one page of the EDGAR filings array and return 10-Ks for fiscal year ``year``.
+
+    The fiscal year is identified by the filing's ``reportDate`` (the fiscal
+    period end), NOT its filing date.  Filing-date heuristics break for
+    companies whose fiscal year does not end in December: Apple (late
+    September, filed ~November of the same year) and Microsoft (June, filed
+    ~July) were previously mapped one year off.  NVIDIA's fiscal year ends in
+    late January, so its "fiscal 2024" 10-K has reportDate 2024-01-28.
+    """
     forms = page.get("form", [])
     dates = page.get("filingDate", [])
+    report_dates = page.get("reportDate", [""] * len(forms))
     accessions = page.get("accessionNumber", [])
+    primary_docs = page.get("primaryDocument", [""] * len(forms))
     candidates = []
-    for form, date, accession in zip(forms, dates, accessions):
-        if form == filing_type:
-            filing_year = int(date[:4])
-            if filing_year == year or filing_year == year + 1:
-                candidates.append({
-                    "ticker": ticker,
-                    "cik": cik,
-                    "company": company_name,
-                    "year": year,
-                    "filing_type": filing_type,
-                    "accession_number": accession,
-                    "filing_date": date,
-                })
+    for form, date, rdate, accession, pdoc in zip(forms, dates, report_dates, accessions, primary_docs):
+        if form != filing_type or not rdate:
+            continue            # skips amendments (10-K/A) and filings without a period
+        if int(rdate[:4]) == year:
+            candidates.append({
+                "ticker": ticker,
+                "cik": cik,
+                "company": company_name,
+                "year": year,
+                "filing_type": filing_type,
+                "accession_number": accession,
+                "filing_date": date,
+                "report_date": rdate,
+                "primary_document": pdoc,
+            })
     return candidates
 
 
 def get_filing_metadata(ticker: str, cik: str, year: int, filing_type: str = "10-K") -> dict:
     """
-    Fetch the accession number and filing date for a company's 10-K filed
-    for a given fiscal year from the SEC EDGAR submissions API.
+    Fetch the accession number and filing date of the 10-K whose fiscal period
+    ends in ``year`` (matched on EDGAR ``reportDate``).
     Paginates through additional filing pages for prolific filers (e.g. JPM).
     """
     url = f"https://data.sec.gov/submissions/CIK{cik}.json"
@@ -68,9 +81,8 @@ def get_filing_metadata(ticker: str, cik: str, year: int, filing_type: str = "10
             if candidates:
                 break
 
-    # Prefer filing dated in year+1 (calendar-year 10-K); fall back to same year
-    for_next_year = [c for c in candidates if c["filing_date"].startswith(str(year + 1))]
-    chosen = for_next_year[0] if for_next_year else (candidates[0] if candidates else None)
+    # If more than one original 10-K reports the same fiscal year (rare), keep the latest filing
+    chosen = max(candidates, key=lambda c: c["filing_date"]) if candidates else None
 
     if chosen is None:
         raise ValueError(f"No {filing_type} found for {ticker} (CIK {cik}) fiscal year {year}")

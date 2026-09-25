@@ -33,7 +33,7 @@ Score three dimensions on a 0-2 scale and return valid JSON:
 }
 
 Scoring rubric:
-answer_correctness:
+answer_correctness (compare with the REFERENCE ANSWER; minor rounding or wording differences are fine):
   0 = Wrong or contradicts the evidence
   1 = Partially correct or missing key details
   2 = Fully correct and complete
@@ -85,26 +85,37 @@ Based solely on the excerpts above, answer the question and return your response
 
 def build_evaluation_prompt(
     question: str,
-    ground_truth: str,
+    reference_answer: str,
     generated_answer: str,
     retrieved_chunks: list[dict],
+    max_chars_per_chunk: int = 1500,
 ) -> str:
-    """Build the evaluation prompt for LLM-as-judge scoring."""
-    context_summary = "\n".join(
-        f"- [{c.get('ticker')} {c.get('year')} {c.get('section')}]: {c.get('text', '')[:200]}..."
+    """
+    Build the LLM-as-judge prompt.
+
+    The judge sees (i) a reference answer written from the correct filing(s)
+    and (ii) the actual retrieved excerpts with their IDs, so that
+    correctness is judged against the reference and citation faithfulness /
+    evidence coverage are judged against the evidence the generator really had.
+    """
+    context = "\n\n".join(
+        f"[ID: {c.get('chunk_id')} | {c.get('ticker')} {c.get('year')} | {c.get('section')}]\n"
+        f"{(c.get('text') or '')[:max_chars_per_chunk]}"
         for c in retrieved_chunks
-    )
+    ) or "(no excerpts were retrieved)"
 
     return f"""Evaluate this answer to a financial question about SEC 10-K filings.
 
 QUESTION: {question}
 
-GROUND TRUTH: {ground_truth}
+REFERENCE ANSWER (written from the correct filing sections; use it to judge answer_correctness):
+{reference_answer}
 
-GENERATED ANSWER: {generated_answer}
+GENERATED ANSWER:
+{generated_answer}
 
-RETRIEVED CONTEXT (summary):
-{context_summary}
+RETRIEVED EXCERPTS SHOWN TO THE ANSWERING MODEL (use these to judge citation_faithfulness and evidence_coverage):
+{context}
 
 Score the answer on answer_correctness, citation_faithfulness, and evidence_coverage.
 Return only the JSON scoring object."""

@@ -40,9 +40,17 @@ def get_qdrant_client() -> QdrantClient:
     return QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=60)
 
 
-def init_qdrant_collection(client: QdrantClient) -> None:
-    """Create the Qdrant collection and payload indexes if they do not already exist."""
+def init_qdrant_collection(client: QdrantClient, recreate: bool = False) -> None:
+    """Create the Qdrant collection and payload indexes if they do not already exist.
+
+    recreate=True drops the existing collection first.  Use it whenever the
+    chunking changes: chunk IDs change, and stale points from the old
+    chunking would otherwise remain searchable."""
     existing = [c.name for c in client.get_collections().collections]
+    if recreate and QDRANT_COLLECTION in existing:
+        client.delete_collection(QDRANT_COLLECTION)
+        existing.remove(QDRANT_COLLECTION)
+        print(f"Dropped collection: {QDRANT_COLLECTION}")
     if QDRANT_COLLECTION not in existing:
         client.create_collection(
             collection_name=QDRANT_COLLECTION,
