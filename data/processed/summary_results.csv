@@ -1,4 +1,4 @@
-strategy,correctness,faithfulness,coverage,pct_correct,pct_retrieval,pct_generation
-Metadata Filtered,1.52,0.57,0.9,40.0,2.5,57.5
-Task-Aware,1.75,0.82,1.1,62.5,0.0,37.5
-Vanilla,1.68,0.68,0.92,50.0,10.0,40.0
+strategy,Correctness,Faithfulness,Coverage,% Correct,% Retrieval Err,% Generation Err
+Metadata Filtered,1.27,1.1,1.23,30.0,50.0,20.0
+Task-Aware,1.48,1.27,1.3,45.0,0.0,55.0
+Vanilla,1.38,1.23,1.27,40.0,20.0,40.0

@@ -7,6 +7,9 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+# Optional: a local directory for embedded Qdrant storage. When set, it is used
+# instead of QDRANT_URL (no server needed; one process at a time).
+QDRANT_PATH = os.getenv("QDRANT_PATH")
 
 COMPANIES = {
     "AAPL": {"cik": "0000320193", "name": "Apple Inc."},

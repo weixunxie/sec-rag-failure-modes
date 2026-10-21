@@ -16,6 +16,7 @@ eval_df = pd.read_csv(os.path.join(PROCESSED_DIR, 'evaluation_results.csv'))
 q_df    = pd.read_csv(os.path.join(PROCESSED_DIR, 'questions.csv'))
 if 'task_type' not in eval_df.columns:
     eval_df = eval_df.merge(q_df[['question_id','task_type']], on='question_id', how='left')
+n_chunks = len(pd.read_parquet(os.path.join(PROCESSED_DIR, 'filing_chunks.parquet'), columns=['chunk_id']))
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 CARD  = '#ffffff'
@@ -37,6 +38,38 @@ STRATS       = ['vanilla', 'metadata_filtered', 'task_aware']
 STRAT_COLS   = [C_VAN, C_META, C_TASK]
 STRAT_LABELS = ['Vanilla', 'Metadata Filtered', 'Task-Aware']
 STRAT_SHORT  = ['Vanilla', 'Meta\nFiltered', 'Task-Aware']
+TASKS        = ['cross_company', 'cross_year', 'risk_factor', 'single_fact']
+COMPARISON   = ['cross_company', 'cross_year']
+
+# ── Metrics (every number on the page comes from evaluation_results.csv) ─────
+by_s   = eval_df.groupby('strategy')
+n_q    = by_s.size().reindex(STRATS)
+stage  = pd.crosstab(eval_df['strategy'], eval_df['error_stage']).reindex(STRATS).fillna(0).astype(int)
+for col in ('none', 'generation', 'retrieval'):
+    if col not in stage:
+        stage[col] = 0
+correct_n = stage['none'].tolist()
+gen_n     = stage['generation'].tolist()
+ret_n     = stage['retrieval'].tolist()
+pct       = {s: 100 * stage.loc[s, 'none'] / n_q[s] for s in STRATS}
+pct_gen   = {s: 100 * stage.loc[s, 'generation'] / n_q[s] for s in STRATS}
+pct_ret   = {s: 100 * stage.loc[s, 'retrieval'] / n_q[s] for s in STRATS}
+mean_c    = by_s['answer_correctness'].mean().reindex(STRATS)
+mean_f    = by_s['citation_faithfulness'].mean().reindex(STRATS)
+mean_cov  = by_s['evidence_coverage'].mean().reindex(STRATS)
+task_mean = eval_df.pivot_table(index='strategy', columns='task_type',
+                                values='answer_correctness', aggfunc='mean').reindex(STRATS)
+comp = eval_df[eval_df['task_type'].isin(COMPARISON)]
+comp_ret = (comp['error_stage'] == 'retrieval').groupby(comp['strategy']).sum().reindex(STRATS).fillna(0).astype(int)
+comp_n   = comp.groupby('strategy').size().reindex(STRATS)
+comp_ok  = (comp['error_stage'] == 'none').groupby(comp['strategy']).sum().reindex(STRATS).fillna(0).astype(int)
+fab_answers = int((eval_df['n_fabricated_citations'] > 0).sum())
+fab_by_s    = (eval_df['n_fabricated_citations'] > 0).groupby(eval_df['strategy']).sum().reindex(STRATS).astype(int)
+partial_gen = int(((eval_df['error_stage'] == 'generation') & (eval_df['answer_correctness'] == 1)).sum())
+all_gen     = int((eval_df['error_stage'] == 'generation').sum())
+best        = max(STRATS, key=lambda s: pct[s])
+LABEL       = dict(zip(STRATS, STRAT_LABELS))
+COLOR       = dict(zip(STRATS, STRAT_COLS))
 
 plt.rcParams.update({
     'font.family': 'DejaVu Sans',
@@ -65,10 +98,6 @@ def fig_to_b64(fig):
 # ─────────────────────────────────────────────────────────────────────────────
 # Chart 1 — Error stage horizontal stacked bar
 # ─────────────────────────────────────────────────────────────────────────────
-correct_n = [20, 16, 25]
-gen_n     = [16, 23, 15]
-ret_n     = [4,   1,  0]
-
 fig, ax = plt.subplots(figsize=(6.8, 2.6))
 fig.patch.set_facecolor(CARD); ax.set_facecolor(CARD)
 y = np.arange(3); h = 0.5
@@ -90,7 +119,7 @@ for bar, v in [(b1, correct_n), (b2, gen_n), (b3, ret_n)]:
 
 ax.set_yticks(y)
 ax.set_yticklabels(STRAT_SHORT, fontsize=10.5, color=TXT, fontweight='600')
-ax.set_xlim(0, 46)
+ax.set_xlim(0, int(n_q.max()) + 6)
 for sp in ax.spines.values(): sp.set_visible(False)
 ax.tick_params(length=0, colors=DIM)
 
@@ -111,11 +140,7 @@ chart_stage = fig_to_b64(fig); plt.close()
 # Chart 2 — Correctness by task type
 # ─────────────────────────────────────────────────────────────────────────────
 TASK_LABS = ['Cross\nCompany', 'Cross\nYear', 'Risk\nFactor', 'Single\nFact']
-task_vals = {
-    'vanilla':           [1.2, 1.7, 2.0, 1.8],
-    'metadata_filtered': [1.0, 1.4, 2.0, 1.7],
-    'task_aware':        [1.7, 1.9, 1.9, 1.5],
-}
+task_vals = {s: [float(task_mean.loc[s, t]) for t in TASKS] for s in STRATS}
 
 fig, ax = plt.subplots(figsize=(6.4, 3.4))
 fig.patch.set_facecolor(CARD); ax.set_facecolor(CARD)
@@ -147,16 +172,14 @@ chart_task = fig_to_b64(fig); plt.close()
 # ─────────────────────────────────────────────────────────────────────────────
 # Chart 3 — Error type breakdown
 # ─────────────────────────────────────────────────────────────────────────────
-err_labels  = ['Correct', 'Citation\nFabrication', 'Wrong\nEntity', 'Reasoning\nError', 'Insufficient\nCoverage']
-err_vals = {
-    'vanilla':           [20, 16, 4, 0, 0],
-    'metadata_filtered': [16, 18, 0, 5, 1],
-    'task_aware':        [25, 13, 0, 2, 0],
-}
+err_counts = pd.crosstab(eval_df['error_type'].fillna('CORRECT'), eval_df['strategy']).reindex(columns=STRATS).fillna(0)
+err_order  = ['CORRECT'] + [e for e in err_counts.sum(axis=1).sort_values(ascending=False).index if e != 'CORRECT']
+err_labels = ['\n'.join(e.title().split('_')) for e in err_order]
+err_vals   = {s: [int(err_counts.loc[e, s]) for e in err_order] for s in STRATS}
 
 fig, ax = plt.subplots(figsize=(6.4, 3.4))
 fig.patch.set_facecolor(CARD); ax.set_facecolor(CARD)
-x = np.arange(5); bw = 0.24; offsets = [-bw, 0, bw]
+x = np.arange(len(err_order)); bw = 0.24; offsets = [-bw, 0, bw]
 
 for strat, col, off in zip(STRATS, STRAT_COLS, offsets):
     bars = ax.bar(x + off, err_vals[strat], bw, color=col, zorder=3, alpha=0.9,
@@ -168,8 +191,8 @@ for strat, col, off in zip(STRATS, STRAT_COLS, offsets):
                     ha='center', va='bottom', fontsize=7.5, color=col, fontweight='600')
 
 ax.set_xticks(x)
-ax.set_xticklabels(err_labels, fontsize=9.5, color=TXT)
-ax.set_ylim(0, 33)
+ax.set_xticklabels(err_labels, fontsize=8.5, color=TXT)
+ax.set_ylim(0, max(max(v) for v in err_vals.values()) + 4)
 ax.set_ylabel('Count', fontsize=9, color=DIM)
 for sp in ax.spines.values(): sp.set_visible(False)
 ax.tick_params(length=0, colors=DIM)
@@ -189,11 +212,9 @@ N = len(categories)
 angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
 angles += angles[:1]
 
-radar_vals = {
-    'vanilla':           [1.68, 0.68, 0.92, 1.00, 1.80],
-    'metadata_filtered': [1.52, 0.57, 0.90, 0.80, 1.95],
-    'task_aware':        [1.75, 0.82, 1.10, 1.25, 2.00],
-}
+# % Correct and "no retrieval error" are rescaled to 0–2 to share the axis
+radar_vals = {s: [float(mean_c[s]), float(mean_f[s]), float(mean_cov[s]),
+                  pct[s] / 50, 2 - pct_ret[s] / 50] for s in STRATS}
 
 fig = plt.figure(figsize=(5.2, 4.4))
 fig.patch.set_facecolor(CARD)
@@ -230,9 +251,9 @@ fig.patch.set_facecolor(CARD); ax.set_facecolor(CARD)
 x = np.arange(3); bw = 0.26; offsets = [-bw, 0, bw]
 
 count_data = [
-    ([20, 16, 25], G_OK,  'Correct'),
-    ([16, 23, 15], G_GEN, 'Generation Error'),
-    ([4,   1,  0], G_RET, 'Retrieval Error'),
+    (correct_n, G_OK,  'Correct'),
+    (gen_n,     G_GEN, 'Generation Error'),
+    (ret_n,     G_RET, 'Retrieval Error'),
 ]
 for i, (vals, col, lbl) in enumerate(count_data):
     bars = ax.bar(x + offsets[i], vals, bw, color=col, zorder=3, alpha=0.9, label=lbl)
@@ -244,8 +265,8 @@ for i, (vals, col, lbl) in enumerate(count_data):
 
 ax.set_xticks(x)
 ax.set_xticklabels(STRAT_SHORT, fontsize=10.5, color=TXT)
-ax.set_ylim(0, 32)
-ax.set_ylabel('Count (out of 40)', fontsize=9, color=DIM)
+ax.set_ylim(0, max(correct_n + gen_n + ret_n) + 4)
+ax.set_ylabel(f'Count (out of {int(n_q.max())})', fontsize=9, color=DIM)
 for sp in ax.spines.values(): sp.set_visible(False)
 ax.tick_params(length=0, colors=DIM)
 
@@ -301,18 +322,26 @@ for t in ['single_fact','risk_factor','cross_year','cross_company']:
 questions_html = ''.join(q_blocks)
 
 strat_info = [
-    ('Vanilla', C_VAN, '50% correct',
-     'Pure cosine similarity over all 2,954 chunks with no metadata filters. Treats every chunk equally regardless of company or year.',
-     ['No query parsing needed','Handles ambiguous multi-entity questions gracefully','Works across all question types'],
-     ['10% retrieval error rate — fetches chunks from the wrong company','Performance degrades as collection grows larger']),
-    ('Metadata Filtered', C_META, '40% correct',
-     'Pre-filters the Qdrant collection by ticker and/or year before similarity search. Restricts the search space to the target company-year.',
-     ['Near-zero retrieval errors (2.5%)','High precision for single-entity questions','Faster search on large collections'],
-     ['Collapses on cross-company queries — filter excludes the second company entirely','Highest generation error rate (57.5%) due to over-narrow context']),
-    ('Task-Aware', C_TASK, '62.5% correct',
-     'Routes queries based on question type. Single-entity questions use metadata filtering; cross-year and cross-company questions split the top-k budget equally between both targets.',
-     ['Best overall accuracy (62.5%)','Zero retrieval errors','70% higher correctness on cross-company tasks vs Metadata-Filtered'],
-     ['Requires question metadata (task_type, companies, years) at query time','Slightly more routing logic to maintain']),
+    ('Vanilla', C_VAN, f"{pct['vanilla']:.0f}% correct",
+     f'Pure cosine similarity over all {n_chunks:,} chunks with no metadata filters. Treats every chunk equally regardless of company or year.',
+     ['No query parsing needed', 'Can surface both sides of a comparison when they are semantically close',
+      'Works across all question types'],
+     [f"{pct_ret['vanilla']:.0f}% retrieval error rate: fetches chunks from the wrong company or year",
+      f"Missed one side of the comparison in {comp_ret['vanilla']} of {comp_n['vanilla']} comparison questions"]),
+    ('Metadata Filtered', C_META, f"{pct['metadata_filtered']:.0f}% correct",
+     'Pre-filters the Qdrant collection to the question\'s primary ticker and year before similarity search.',
+     ['Clean, on-target context for single-entity questions',
+      f"Ties the other strategies on single-fact and risk-factor questions",
+      'Faster search on large collections'],
+     [f"Retrieval failure on {comp_ret['metadata_filtered']} of {comp_n['metadata_filtered']} comparison questions: the filter excludes the second company or year",
+      f"Lowest accuracy overall ({pct['metadata_filtered']:.0f}%)"]),
+    ('Task-Aware', C_TASK, f"{pct['task_aware']:.0f}% correct",
+     'Routes queries by question type. Single-entity questions use metadata filtering; cross-year and cross-company questions split the top-k budget equally between both targets.',
+     [f"Best overall accuracy ({pct['task_aware']:.0f}%)",
+      f"{comp_ret['task_aware']} retrieval errors on comparison questions",
+      f"Highest correctness on cross-company questions ({task_mean.loc['task_aware', 'cross_company']:.2f} vs {task_mean.loc['metadata_filtered', 'cross_company']:.2f} for Metadata-Filtered)"],
+     ['Requires question metadata (task type, companies, years) at query time',
+      f"Highest generation error rate ({pct_gen['task_aware']:.0f}%): with the right evidence retrieved, the remaining failures are incomplete synthesis"]),
 ]
 s_blocks = []
 for name, color, score, desc, pros, cons in strat_info:
@@ -460,20 +489,20 @@ HTML = f"""<!DOCTYPE html>
 
 <div class="kpi-row">
   <div class="kpi"><div class="val">15</div><div class="lbl">10-K Filings Downloaded</div></div>
-  <div class="kpi"><div class="val">2,954</div><div class="lbl">Chunks Indexed in Qdrant</div></div>
-  <div class="kpi"><div class="val">120</div><div class="lbl">Answers Evaluated</div></div>
-  <div class="kpi green"><div class="val">62.5%</div><div class="lbl">Best Accuracy — Task-Aware</div></div>
-  <div class="kpi amber"><div class="val">~45%</div><div class="lbl">Avg Generation Error Rate</div></div>
-  <div class="kpi red"><div class="val">47</div><div class="lbl">Citation Fabrication Errors (total)</div></div>
+  <div class="kpi"><div class="val">{n_chunks:,}</div><div class="lbl">Chunks Indexed in Qdrant</div></div>
+  <div class="kpi"><div class="val">{len(eval_df)}</div><div class="lbl">Answers Evaluated</div></div>
+  <div class="kpi green"><div class="val">{pct[best]:.0f}%</div><div class="lbl">Best Accuracy — {LABEL[best]}</div></div>
+  <div class="kpi red"><div class="val">{comp_ret['metadata_filtered']}/{comp_n['metadata_filtered']}</div><div class="lbl">Comparison Questions Metadata-Filtered Fails to Retrieve</div></div>
+  <div class="kpi amber"><div class="val">{fab_answers}</div><div class="lbl">Answers Citing an Unretrieved Chunk</div></div>
 </div>
 
 <div class="summary">
   <h2>Key Findings</h2>
   <div class="findings">
-    <div class="finding"><span class="tag green">Winner</span><span><strong>Task-Aware retrieval scores 62.5% fully correct</strong> — 12.5 pts above Vanilla and 22.5 pts above Metadata-Filtered — by allocating retrieval budget based on question type (split-k for comparisons, filtered for single-entity).</span></div>
-    <div class="finding"><span class="tag amber">Surprise</span><span><strong>Metadata-Filtered is the worst overall (40%) despite having the lowest retrieval error rate (2.5%).</strong> Over-filtering collapses context for cross-entity questions, driving generation errors up to 57.5% — the highest of any strategy.</span></div>
-    <div class="finding"><span class="tag red">Top error</span><span><strong>Citation Fabrication dominates across all strategies</strong> (47 / 120 answers, 39%). The model invents chunk IDs not present in the retrieved context — a generation-stage failure independent of retrieval quality.</span></div>
-    <div class="finding"><span class="tag indigo">Implication</span><span><strong>Generation errors (40–57%) consistently outweigh retrieval errors in every strategy.</strong> Further retrieval tuning yields diminishing returns; prompt engineering and structured output validation are the higher-leverage next steps.</span></div>
+    <div class="finding"><span class="tag green">Winner</span><span><strong>Task-Aware retrieval scores {pct['task_aware']:.0f}% fully correct</strong>, ahead of Vanilla ({pct['vanilla']:.0f}%) and Metadata-Filtered ({pct['metadata_filtered']:.0f}%). It is the only strategy that retrieves evidence for both sides of every comparison question ({comp_ret['task_aware']} retrieval errors on {comp_n['task_aware']} comparison questions).</span></div>
+    <div class="finding"><span class="tag red">Structural</span><span><strong>Metadata filtering fails every comparison question at retrieval</strong> ({comp_ret['metadata_filtered']} of {comp_n['metadata_filtered']}): a single ticker/year filter cannot return the second company or year. Vanilla misses one side in {comp_ret['vanilla']} of {comp_n['vanilla']}. On single-fact and risk-factor questions the three strategies are close.</span></div>
+    <div class="finding"><span class="tag amber">Generation</span><span><strong>Once retrieval is right, the remaining errors are incomplete answers.</strong> {partial_gen} of {all_gen} generation-stage errors are partially correct (score 1 of 2), typically missing a detail the reference answer includes, rather than hallucinated.</span></div>
+    <div class="finding"><span class="tag indigo">Citations</span><span><strong>Citation fabrication is rare once it is checked deterministically.</strong> Only {fab_answers} of {len(eval_df)} answers cite a chunk ID that was not retrieved (Vanilla {fab_by_s['vanilla']}, Metadata {fab_by_s['metadata_filtered']}, Task-Aware {fab_by_s['task_aware']}). The first run's 47 came from a judge that never saw the retrieved text.</span></div>
   </div>
 </div>
 
@@ -484,31 +513,31 @@ HTML = f"""<!DOCTYPE html>
       <thead><tr><th>Strategy</th><th>% Correct</th><th>Correctness /2</th><th>Faithfulness /2</th></tr></thead>
       <tbody>
         <tr>
-          <td><div class="s-name-cell"><div class="s-dot-sm" style="background:{C_TASK}"></div>Task-Aware</div></td>
-          <td><span class="badge" style="background:{C_TASK}18;color:{C_TASK}">62.5%</span></td>
-          <td><div class="mini-bar"><span>1.75</span><div class="bar-track"><div class="bar-fill" style="width:87.5%;background:{C_TASK}"></div></div></div></td>
-          <td><div class="mini-bar"><span>0.82</span><div class="bar-track"><div class="bar-fill" style="width:41%;background:{C_TASK}"></div></div></div></td>
+          <td><div class="s-name-cell"><div class="s-dot-sm" style="background:{COLOR['task_aware']}"></div>{LABEL['task_aware']}</div></td>
+          <td><span class="badge" style="background:{COLOR['task_aware']}18;color:{COLOR['task_aware']}">{pct['task_aware']:.1f}%</span></td>
+          <td><div class="mini-bar"><span>{mean_c['task_aware']:.2f}</span><div class="bar-track"><div class="bar-fill" style="width:{mean_c['task_aware'] * 50:.1f}%;background:{COLOR['task_aware']}"></div></div></div></td>
+          <td><div class="mini-bar"><span>{mean_f['task_aware']:.2f}</span><div class="bar-track"><div class="bar-fill" style="width:{mean_f['task_aware'] * 50:.1f}%;background:{COLOR['task_aware']}"></div></div></div></td>
         </tr>
         <tr>
-          <td><div class="s-name-cell"><div class="s-dot-sm" style="background:{C_VAN}"></div>Vanilla</div></td>
-          <td><span class="badge" style="background:{C_VAN}18;color:{C_VAN}">50.0%</span></td>
-          <td><div class="mini-bar"><span>1.68</span><div class="bar-track"><div class="bar-fill" style="width:84%;background:{C_VAN}"></div></div></div></td>
-          <td><div class="mini-bar"><span>0.68</span><div class="bar-track"><div class="bar-fill" style="width:34%;background:{C_VAN}"></div></div></div></td>
+          <td><div class="s-name-cell"><div class="s-dot-sm" style="background:{COLOR['vanilla']}"></div>{LABEL['vanilla']}</div></td>
+          <td><span class="badge" style="background:{COLOR['vanilla']}18;color:{COLOR['vanilla']}">{pct['vanilla']:.1f}%</span></td>
+          <td><div class="mini-bar"><span>{mean_c['vanilla']:.2f}</span><div class="bar-track"><div class="bar-fill" style="width:{mean_c['vanilla'] * 50:.1f}%;background:{COLOR['vanilla']}"></div></div></div></td>
+          <td><div class="mini-bar"><span>{mean_f['vanilla']:.2f}</span><div class="bar-track"><div class="bar-fill" style="width:{mean_f['vanilla'] * 50:.1f}%;background:{COLOR['vanilla']}"></div></div></div></td>
         </tr>
         <tr>
-          <td><div class="s-name-cell"><div class="s-dot-sm" style="background:{C_META}"></div>Metadata Filtered</div></td>
-          <td><span class="badge" style="background:{C_META}18;color:{C_META}">40.0%</span></td>
-          <td><div class="mini-bar"><span>1.52</span><div class="bar-track"><div class="bar-fill" style="width:76%;background:{C_META}"></div></div></div></td>
-          <td><div class="mini-bar"><span>0.57</span><div class="bar-track"><div class="bar-fill" style="width:28.5%;background:{C_META}"></div></div></div></td>
+          <td><div class="s-name-cell"><div class="s-dot-sm" style="background:{COLOR['metadata_filtered']}"></div>{LABEL['metadata_filtered']}</div></td>
+          <td><span class="badge" style="background:{COLOR['metadata_filtered']}18;color:{COLOR['metadata_filtered']}">{pct['metadata_filtered']:.1f}%</span></td>
+          <td><div class="mini-bar"><span>{mean_c['metadata_filtered']:.2f}</span><div class="bar-track"><div class="bar-fill" style="width:{mean_c['metadata_filtered'] * 50:.1f}%;background:{COLOR['metadata_filtered']}"></div></div></div></td>
+          <td><div class="mini-bar"><span>{mean_f['metadata_filtered']:.2f}</span><div class="bar-track"><div class="bar-fill" style="width:{mean_f['metadata_filtered'] * 50:.1f}%;background:{COLOR['metadata_filtered']}"></div></div></div></td>
         </tr>
       </tbody>
     </table>
-    <p class="insight">Scores on a 0–2 scale, LLM-as-judge via <strong>gpt-4o-mini</strong>. <strong style="color:{C_TASK}">Task-Aware</strong> leads on every metric. Metadata-Filtered has the lowest faithfulness score (0.57), consistent with its high citation fabrication rate.</p>
+    <p class="insight">Scores on a 0–2 scale, LLM-as-judge via <strong>gpt-4o-mini</strong> (temperature 0) against reference answers built from SEC XBRL facts and the correct filing sections, then checked by hand against the filings. The judge sees the full text of every retrieved chunk.</p>
   </div>
   <div class="card">
-    <div class="card-title">Error Stage Distribution (out of 40 per strategy)</div>
+    <div class="card-title">Error Stage Distribution (out of {int(n_q.max())} per strategy)</div>
     <img src="data:image/png;base64,{chart_stage}" alt="Error stage chart">
-    <p class="insight"><strong style="color:{G_OK}">Task-Aware eliminates retrieval errors entirely.</strong> Vanilla's <strong style="color:{G_RET}">10% retrieval error rate</strong> (4 WRONG_ENTITY cases) comes from unfiltered similarity fetching wrong-company chunks. Metadata-Filtered's <strong style="color:{G_GEN}">57.5% generation error rate</strong> is the highest: over-filtering leaves too little context for the model to synthesize complete answers.</p>
+    <p class="insight">A retrieval-stage error means the retrieved chunks did not cover the expected company and year (for comparisons: both sides). <strong style="color:{G_RET}">Metadata-Filtered</strong> has {pct_ret['metadata_filtered']:.0f}% retrieval errors, all on comparison questions; <strong style="color:{C_TASK}">Task-Aware</strong> has {pct_ret['task_aware']:.0f}%. Task-Aware's higher generation-error share is the flip side: its failures happen after the right evidence was found.</p>
   </div>
 </div>
 
@@ -516,12 +545,12 @@ HTML = f"""<!DOCTYPE html>
   <div class="card">
     <div class="card-title">Answer Correctness by Task Type (0–2 scale)</div>
     <img src="data:image/png;base64,{chart_task}" alt="Correctness by task type">
-    <p class="insight"><strong>Cross-company questions expose the sharpest gap:</strong> <strong style="color:{C_TASK}">Task-Aware (1.7)</strong> vs <strong style="color:{C_META}">Metadata-Filtered (1.0)</strong> — 70% higher. The single-ticker filter silently excludes the second company's evidence. All three strategies converge near the top on <strong>risk_factor</strong> (≥1.9), where section-aware chunking provides clean, focused evidence paragraphs.</p>
+    <p class="insight"><strong>Cross-company questions show the clearest gap:</strong> <strong style="color:{C_TASK}">Task-Aware ({task_mean.loc['task_aware', 'cross_company']:.2f})</strong> vs <strong style="color:{C_META}">Metadata-Filtered ({task_mean.loc['metadata_filtered', 'cross_company']:.2f})</strong>. On cross-year questions Vanilla ({task_mean.loc['vanilla', 'cross_year']:.2f}) edges Task-Aware ({task_mean.loc['task_aware', 'cross_year']:.2f}). With 10 questions per type, differences of a few tenths are within noise.</p>
   </div>
   <div class="card">
     <div class="card-title">Error Type Breakdown by Strategy</div>
     <img src="data:image/png;base64,{chart_error}" alt="Error type breakdown">
-    <p class="insight"><strong style="color:{C_TASK}">Task-Aware</strong> leads with 25 correct answers. <strong>Citation Fabrication</strong> is the dominant failure in every strategy (13–18 cases each) — the model invents chunk IDs not in the context. <strong>WRONG_ENTITY</strong> (4 cases, only in <strong style="color:{C_VAN}">Vanilla</strong>) disappears completely once any metadata filter is applied.</p>
+    <p class="insight"><strong>WRONG_ENTITY and WRONG_YEAR</strong> come from Metadata-Filtered and Vanilla on comparison questions and disappear under Task-Aware. Most remaining errors are labelled <strong>REASONING_ERROR</strong>, but nearly all of them are partially correct answers that omit a detail, so the label overstates how often the model reasons incorrectly.</p>
   </div>
 </div>
 
@@ -529,12 +558,12 @@ HTML = f"""<!DOCTYPE html>
   <div class="card">
     <div class="card-title">Multi-Dimensional Score Profile</div>
     <img src="data:image/png;base64,{chart_radar}" alt="Radar chart">
-    <p class="insight"><strong style="color:{C_TASK}">Task-Aware (green)</strong> leads on all five axes. The biggest advantage over competitors is on <strong>% Correct (scaled)</strong> and <strong>Faithfulness</strong> — both generation-stage metrics — confirming that better context coverage from split-budget retrieval directly reduces model fabrication, not just retrieval failure.</p>
+    <p class="insight">% Correct and "No Retrieval Error" are rescaled to 0–2. <strong style="color:{C_TASK}">Task-Aware</strong> leads on correctness, faithfulness and retrieval; the gaps on faithfulness and coverage are small.</p>
   </div>
   <div class="card">
     <div class="card-title">Correct vs. Error Counts per Strategy</div>
     <img src="data:image/png;base64,{chart_counts}" alt="Count chart">
-    <p class="insight"><strong style="color:{C_TASK}">Task-Aware: 25 correct</strong>, 15 generation errors, 0 retrieval errors — the cleanest profile. <strong style="color:{C_META}">Metadata-Filtered: only 16 correct</strong> with 23 generation errors, the worst outcome despite having near-perfect retrieval precision. Confirms that context breadth matters more than retrieval purity on a diverse question set.</p>
+    <p class="insight"><strong style="color:{C_TASK}">Task-Aware: {correct_n[2]} correct</strong>, {gen_n[2]} generation errors, {ret_n[2]} retrieval errors. <strong style="color:{C_META}">Metadata-Filtered: {correct_n[1]} correct</strong>, {ret_n[1]} retrieval errors. <strong style="color:{C_VAN}">Vanilla: {correct_n[0]} correct</strong>. 40 questions per strategy, so a one-question difference moves accuracy by 2.5 points.</p>
   </div>
 </div>
 

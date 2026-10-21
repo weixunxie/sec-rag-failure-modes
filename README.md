@@ -83,7 +83,9 @@ QDRANT_API_KEY=your-qdrant-api-key
 
 You need:
 - **OpenAI API key** — for `text-embedding-3-small` embeddings, `gpt-4o-mini` answer generation and LLM-as-judge evaluation, and `gpt-4o` reference answers
-- **Qdrant** — a free cluster at [cloud.qdrant.io](https://cloud.qdrant.io) works fine (~$0 for this volume)
+- **Qdrant** — a free cluster at [cloud.qdrant.io](https://cloud.qdrant.io) works fine (~$0 for this volume).
+  Or set `QDRANT_PATH=/absolute/path/to/qdrant_storage` to use embedded local storage with no server
+  (one process at a time; notebooks run from `notebooks/`, so use an absolute path).
 
 ### 3. Run notebooks in order
 
@@ -173,7 +175,7 @@ characters are merged into the preceding section rather than opening a new one.
 
 - **Reference answers.** `src/reference_answers.py` writes one reference answer per question from (i) XBRL
   facts pulled from the SEC companyfacts API for the numeric questions and (ii) the gold filing(s) and
-  expected section(s), using gpt-4o. These are reviewed by hand before judging.
+  expected section(s), using gpt-4o. These are reviewed by hand against the filings before judging.
 - **Judge.** `gpt-4o-mini` at temperature 0 scores correctness against the reference answer, and scores
   citation faithfulness and evidence coverage against the **excerpts the strategy actually retrieved**.
 - **Error attribution.** Retrieval-stage errors are determined from the retrieved set (for comparison
@@ -184,7 +186,7 @@ characters are merged into the preceding section rather than opening a new one.
 
 | Step | API | Estimated Cost |
 |------|-----|---------------|
-| Embed 2,954 chunks | OpenAI `text-embedding-3-small` | ~$0.01 |
+| Embed 2,916 chunks | OpenAI `text-embedding-3-small` | ~$0.01 |
 | 120 answer generations | OpenAI `gpt-4o-mini` | ~$0.05 |
 | 120 evaluation calls | OpenAI `gpt-4o-mini` | ~$0.05 |
 | 360 query embeddings | OpenAI `text-embedding-3-small` | ~$0.01 |
@@ -199,39 +201,84 @@ Per SEC guidelines, requests include a `User-Agent` header and are rate-limited 
 
 ## Results
 
-> **Status (Sep 2026): the numbers below are from the first run and are being re-computed.** A review of that run found
-> four problems. All are fixed in the code, and the table will be replaced after `./run_pipeline.sh`:
->
-> 1. **Fiscal-year mapping.** Filings were chosen by *filing date* ("filed in year + 1"). For Apple (September
->    fiscal year-end) and Microsoft (June) that picks the following fiscal year's 10-K, so questions about
->    "fiscal 2023" were answered from FY2024 filings. Filings are now matched on EDGAR `reportDate`.
-> 2. **No reference answers.** `questions.csv` had no `expected_answer` column, and the judge was silently handed
->    the question text as "ground truth". Evaluation now requires reference answers.
-> 3. **Judge never saw the evidence.** The judge received only the chunk IDs the model *cited*, with empty text,
->    so it could not verify citations. That likely inflated `CITATION_FABRICATION` (47 of 120 answers). Retrieval-
->    stage errors were also inferred from cited rather than retrieved chunks.
-> 4. **Section labels.** Sections had no end boundary after Item 9A, so exhibits and (for JPM) the full annual
->    report were labelled "Controls" (1,286 of 2,954 chunks).
-
-Two checks that need no API calls can already be run on the first-run outputs:
-
-- Only **15 of 120** answers cite a chunk ID that was not actually retrieved (Vanilla 4, Metadata 7, Task-Aware 4).
-  The judge had labelled 47 answers `CITATION_FABRICATION`.
-- For comparison questions, Metadata-Filtered retrieved evidence for **both** sides in **0 of 20** questions,
-  Vanilla in 11 of 20, and Task-Aware in 20 of 20. Under the corrected attribution, Metadata-Filtered's
-  "2.5% retrieval error" becomes a retrieval failure on every comparison question.
-
-First-run results (for reference only):
+Re-run in October 2026 after the fixes listed below. 40 questions × 3 strategies = 120 answers, judged by
+`gpt-4o-mini` (temperature 0) against hand-checked reference answers. Source: `data/processed/summary_results.csv`
+and `evaluation_results.csv`. The live dashboard is generated from the same files.
 
 | Strategy | Correctness | Citation Faithfulness | Evidence Coverage | % Correct | % Retrieval Err | % Generation Err |
 |----------|------------|----------------------|-------------------|-----------|----------------|-----------------|
-| Vanilla | 1.68 | 0.68 | 0.92 | 50% | 10% | 40% |
-| Metadata Filtered | 1.52 | 0.57 | 0.90 | 40% | 2.5% | 57.5% |
-| Task-Aware | 1.75 | 0.82 | 1.10 | 62.5% | 0% | 37.5% |
+| Vanilla | 1.38 | 1.23 | 1.27 | 40% | 20% | 40% |
+| Metadata Filtered | 1.27 | 1.10 | 1.23 | 30% | 50% | 20% |
+| Task-Aware | **1.48** | **1.27** | **1.30** | **45%** | **0%** | 55% |
 
-The directional finding most likely to survive is structural rather than statistical. Metadata filtering by a single
-ticker/year cannot retrieve the second entity in a comparison question (cross-company correctness 1.0 vs 1.7 for
-Task-Aware), whereas Task-Aware gives each side of the comparison its own retrieval budget.
+Scores are means on a 0–2 scale. "% Correct" means no error was assigned at either stage.
+
+**Retrieval-stage errors by task type** (count out of 10 questions per cell):
+
+| Task type | Vanilla | Metadata Filtered | Task-Aware |
+|-----------|---------|-------------------|------------|
+| single_fact | 0 | 0 | 0 |
+| risk_factor | 0 | 0 | 0 |
+| cross_year | 2 | **10** | 0 |
+| cross_company | 6 | **10** | 0 |
+
+**Mean correctness by task type:**
+
+| Task type | Vanilla | Metadata Filtered | Task-Aware |
+|-----------|---------|-------------------|------------|
+| single_fact | 1.6 | 1.6 | 1.7 |
+| risk_factor | 1.6 | 1.6 | 1.7 |
+| cross_year | **1.3** | 0.9 | 1.1 |
+| cross_company | 1.0 | 1.0 | **1.4** |
+
+### Findings
+
+1. **Task-Aware is best overall (45% fully correct) and is the only strategy with no retrieval failures.** Its
+   split budget retrieves evidence for both sides of all 20 comparison questions.
+2. **Metadata filtering fails every comparison question at retrieval (20 of 20).** A single ticker/year filter
+   cannot return the second company or year. On single-fact and risk-factor questions it ties the other
+   strategies, so the cost is entirely structural. Vanilla misses one side of a comparison in 8 of 20.
+3. **Once retrieval is right, the remaining errors are mostly incomplete answers, not hallucinations.** 39 of the
+   46 generation-stage errors score 1 of 2 (partially correct), typically omitting a detail that the reference
+   answer includes. Task-Aware has the highest generation-error share (55%) precisely because its failures happen
+   after the right evidence was found.
+4. **Citation fabrication is rare when it is checked deterministically.** Only 10 of 120 answers cite a chunk ID
+   that was not retrieved (Vanilla 2, Metadata Filtered 7, Task-Aware 1). The first run reported 47, because its
+   judge never saw the retrieved text.
+
+### Caveats
+
+- **Small sample.** 40 questions per strategy, 10 per task type: one question moves accuracy by 2.5 points.
+  Differences on single-fact and risk-factor questions are within noise and no significance test has been run
+  (a paired bootstrap or McNemar test on the 40 shared questions would be the next step).
+- **Judge strictness and labels.** The judge marks partially complete answers as `REASONING_ERROR`, which
+  overstates reasoning failures, and it penalizes rounding (e.g. "$4.0 trillion" for $4,002.8 billion).
+- **Reference answers.** Drafted by gpt-4o from XBRL facts and the gold sections, then checked against the
+  filings by hand. 13 of 40 were corrected (`reference_source` ends in `+manual_fix`): mostly cases where the
+  draft wrongly said a figure was "not disclosed" (e.g. JPMorgan net interest income, headcounts, NVIDIA's
+  fiscal 2024 gross margin), plus one segment figure reported as firm-wide.
+- **Local vector store.** This run used embedded local Qdrant (`QDRANT_PATH`), which ignores payload indexes;
+  filtering is still exact, just unindexed.
+
+### What changed since the first run
+
+The first run (archived in `data/processed/v1_archive/`) reported Task-Aware 62.5%, Vanilla 50% and Metadata
+Filtered 40% correct. A review found four problems, all fixed before this re-run:
+
+1. **Fiscal-year mapping.** Filings were chosen by *filing date* ("filed in year + 1"). For Apple (September
+   fiscal year-end) and Microsoft (June) that picks the following fiscal year's 10-K. Filings are now matched on
+   EDGAR `reportDate`.
+2. **No reference answers.** `questions.csv` had no `expected_answer` column, and the judge was silently handed
+   the question text as "ground truth". Evaluation now requires reference answers.
+3. **Judge never saw the evidence.** The judge received only the chunk IDs the model *cited*, with empty text.
+   That inflated `CITATION_FABRICATION` (47 of 120 answers). Retrieval-stage errors were also inferred from
+   cited rather than retrieved chunks.
+4. **Section labels.** Sections had no end boundary after Item 9A, so exhibits and (for JPM) the full annual
+   report were labelled "Controls" (1,286 of 2,954 chunks). After the fix, 28 of 2,916 chunks are "Controls".
+
+The headline ranking is unchanged, but absolute accuracy fell once the judge compared answers with real
+reference answers, and the story moved from "citation fabrication dominates" to "retrieval structure decides
+comparison questions; generation failures are mostly incompleteness".
 
 Figures are saved in [`figures/`](figures/).
 

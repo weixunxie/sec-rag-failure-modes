@@ -1,0 +1,16 @@
+ticker,cik,company,year,filing_type,accession_number,filing_date,local_path,error
+AAPL,320193,Apple Inc.,2022,10-K,0000320193-23-000106,2023-11-03,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/AAPL_2022_10K.txt,
+AAPL,320193,Apple Inc.,2023,10-K,0000320193-24-000123,2024-11-01,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/AAPL_2023_10K.txt,
+AAPL,320193,Apple Inc.,2024,10-K,0000320193-25-000079,2025-10-31,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/AAPL_2024_10K.txt,
+MSFT,789019,MICROSOFT CORP,2022,10-K,0000950170-23-035122,2023-07-27,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/MSFT_2022_10K.txt,
+MSFT,789019,MICROSOFT CORP,2023,10-K,0000950170-24-087843,2024-07-30,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/MSFT_2023_10K.txt,
+MSFT,789019,MICROSOFT CORP,2024,10-K,0000950170-25-100235,2025-07-30,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/MSFT_2024_10K.txt,
+NVDA,1045810,NVIDIA CORP,2022,10-K,0001045810-23-000017,2023-02-24,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/NVDA_2022_10K.txt,
+NVDA,1045810,NVIDIA CORP,2023,10-K,0001045810-24-000029,2024-02-21,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/NVDA_2023_10K.txt,
+NVDA,1045810,NVIDIA CORP,2024,10-K,0001045810-25-000023,2025-02-26,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/NVDA_2024_10K.txt,
+TSLA,1318605,"Tesla, Inc.",2022,10-K,0000950170-23-001409,2023-01-31,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/TSLA_2022_10K.txt,
+TSLA,1318605,"Tesla, Inc.",2023,10-K,0001628280-24-002390,2024-01-29,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/TSLA_2023_10K.txt,
+TSLA,1318605,"Tesla, Inc.",2024,10-K,0001628280-25-003063,2025-01-30,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/TSLA_2024_10K.txt,
+JPM,0000019617,JPMORGAN CHASE & CO,2022,10-K,0000019617-23-000231,2023-02-21,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/JPM_2022_10K.txt,No 10-K found for JPM (CIK 0000019617) fiscal year 2022
+JPM,0000019617,JPMORGAN CHASE & CO,2023,10-K,0000019617-24-000225,2024-02-16,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/JPM_2023_10K.txt,No 10-K found for JPM (CIK 0000019617) fiscal year 2023
+JPM,0000019617,JPMORGAN CHASE & CO,2024,10-K,0000019617-25-000270,2025-02-14,/Users/bellamac/Desktop/sec-rag-failure-modes/./src/../data/raw/JPM_2024_10K.txt,No 10-K found for JPM (CIK 0000019617) fiscal year 2024

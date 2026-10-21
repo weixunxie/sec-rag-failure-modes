@@ -20,6 +20,7 @@ from src.config import (
     OPENAI_API_KEY,
     QDRANT_URL,
     QDRANT_API_KEY,
+    QDRANT_PATH,
     QDRANT_COLLECTION,
     EMBEDDING_MODEL,
     EMBEDDING_DIM,
@@ -37,6 +38,8 @@ def _get_openai_client() -> OpenAI:
 
 
 def get_qdrant_client() -> QdrantClient:
+    if QDRANT_PATH:
+        return QdrantClient(path=QDRANT_PATH)
     return QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=60)
 
 
